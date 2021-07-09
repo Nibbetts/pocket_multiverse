@@ -1,0 +1,11 @@
+[package]
+name = "pocket_multiverse"
+version = "0.1.0"
+authors = [ # Add yourself here if you've collaborated with this project
+    "nibbetts <nathan.paul.tibbetts@gmail.com>",
+]
+edition = "2018" # Rust Edition
+description = "A 2.5D bent-space simulator/game"
+
+[dependencies]
+stl_io = "0.6.0"
