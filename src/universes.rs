@@ -147,7 +147,7 @@ struct Trajectory2D {
 impl Trajectory2D {
     /// Moves the trajectory to its end point, changing both start and length
     /// values. For use within a Triangle, as it has no knowledge of boundaries
-    fn move_to_end(&self) {
+    fn move_to_end(&mut self) {
         // TODO: move x and y by length in direction of trajectory
         self.length = 0.;
     }
@@ -168,17 +168,17 @@ pub fn load(level_name: &str) -> Universe {
     // TODO: add error catching later, instead of 'panic'ing
     let mut file = OpenOptions::new().read(true).open(
         MODEL_PATH.to_string() + level_name + MODEL_FORMAT).expect(
-            format!("Unable to find {}{}", level_name, MODEL_FORMAT)
+            &format!("Unable to find {}{}", level_name, MODEL_FORMAT)
         );
     let model = stl_io::read_stl(&mut file).expect(
-        format!("Failed to read {}{}", level_name, MODEL_FORMAT)
+        &format!("Failed to read {}{}", level_name, MODEL_FORMAT)
     );
     model.validate().expect(
-        format!("{}{} was corrupt", level_name, MODEL_FORMAT)
+        &format!("{}{} was corrupt", level_name, MODEL_FORMAT)
     ); // TODO: Is this necessary? How time efficient is this validation?
     file = OpenOptions::new().read(true).open(
         LEVEL_PATH.to_string() + level_name + LEVEL_FORMAT).expect(
-            format!("Unable to find {}{}", level_name, LEVEL_FORMAT)
+            &format!("Unable to find {}{}", level_name, LEVEL_FORMAT)
         );
     // let metadata = ???
 
