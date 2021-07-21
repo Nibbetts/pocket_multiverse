@@ -151,6 +151,11 @@ impl Trajectory2D {
         // TODO: move x and y by length in direction of trajectory
         self.length = 0.;
     }
+
+    /// TODO
+    fn advance_by() {
+
+    }
 }
 
 impl Universe {
