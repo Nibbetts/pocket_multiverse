@@ -1,4 +1,7 @@
 use std::fs::OpenOptions;
+use std::collections::HashMap;
+use std::collections::hash_map::Entry;
+use ndarray;
 use stl_io;
 
 // CONSTANTS
@@ -12,12 +15,10 @@ const LEVEL_FORMAT: &str = ".toml";
 /// it preprocessed at universe instantiation.
 pub struct Universe {
     name: String,
-    vertices: Vec<stl_io::Vertex>,
-    faces: Vec<stl_io::IndexedTriangle>,
-    scale: f32, // TODO: make 1/(average of edge length)
-    // h: f32, // TODO
-    // w: f32,
-    // d: f32,
+    vertices: Vec<Vertex>,
+    faces: Vec<Face>,
+    maxdim: f32, // make max(h,w,d)/scale
+    count: u32, // triangle count
 }
 
 // TODO:  test and consider whether we need a full graph structure implementation
@@ -30,11 +31,9 @@ pub struct Universe {
 ///     Its neighboring vertices by index in Universe,
 ///     Its own 'Normal' (as an average of the Normals of the faces around it)
 struct Vertex {
-    position: stl_io::Vertex,
-    triangles: [u32; 3],
-    vertices: [u32; 3],
-    normal: stl_io::Normal,
-    //color: Color, // TODO: for regions in space?
+    position: ndarray::arr1<f32>,
+    normal: ndarray::arr1<f32>,
+    //color: Color, // TODO: for regions in space? No, this should be managed by color centers, not by vertex, I think?
 }
 
 /// A smart triangular face which knows:
@@ -48,12 +47,12 @@ struct Vertex {
 /// 
 /// NOTE: The 2D representation of a Triangle is pre-scaled, so that travel
 /// across it is straightforward.
-struct Triangle {
+struct Face {
     normal: stl_io::Normal,
     vertices: [usize; 3],
-    triangles: [u32; 3],
+    triangles: [usize; 3],
     segments: [LineSegment2D; 3],
-    edges: [[u32; 2]; 3],
+    // edges: [[u32; 2]; 3],
 }
 
 /// A 2D line segment, including slope, intercept,
@@ -187,14 +186,37 @@ pub fn load(level_name: &str) -> Universe {
         );
     // let metadata = ???
 
-    // TODO: find neighbors and make a graph structure
+    // Find Neighbors and create graph structure
+
+    // Find the triangles adjacent to each vertex
+    let (vertices, triangles) = (model.vertices, model.faces);
+    let mut v_to_t: HashMap<usize, Vec<&stl_io::IndexedTriangle>> = HashMap::new(); // vertex index -> Vec<adjacent triangles>
+    for t in triangles.iter() {
+        for vi in t.vertices.iter() {
+            match v_to_t.get(vi) {
+                Some(o) => o.push(t),
+                None => {v_to_t.insert(*vi, vec![t]);},
+            }
+        }
+    }
+    // Create Vertex structs
+    let v = Vec::new();
+    for (vi, ts) in v_to_t.iter() {
+        let position = ndarray::arr1::from(vertices[*vi]);
+        let normal = ? // Find the average normal of the others
+        v.push(Vector{position, normal});
+    }
+    // TODO: make 1/(average of edge length), but scale all points before finalizing
     // TODO: make sure all triangles have exactly three neighbors
 
     // Finally, instantiate it and return it
     Universe {
         name: String::from("Hambone"),
-        vertices: model.vertices,
-        faces: model.faces,
-        scale: 1., // TODO: find average edge length, use to give default scale if not included in level metadata
+        vertices: ?,
+        faces: ?,
+        maxdim: ?, // TODO: find average edge length, use to give default scale if not included in level metadata
+        count: ?,
     }
+
+    //TODO: later, learn how to do it all with references instead of just indices
 }
