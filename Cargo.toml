@@ -9,3 +9,5 @@ description = "A 2.5D bent-space simulator/game"
 
 [dependencies]
 stl_io = "0.6.0"
+ndarray = "0.15.3"
+unordered-pair = "0.2.3"

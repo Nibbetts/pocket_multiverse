@@ -7,7 +7,7 @@ fn main() {
     // We begin with a basic test. In the future we will move on to adding
     // controls to universe loading and such.
     println!("Loading 'Hambone' pocket universe...");
-    let pocket = universes::load("hambone");
+    let pocket = universes::load("hambone").unwrap();
 }
 
 /* TODO on Entities:
