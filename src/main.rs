@@ -1,4 +1,5 @@
 mod universes;
+mod entities;
 
 
 fn main() {
@@ -44,7 +45,6 @@ fn main() {
         for all situations. Later we can add in more, and then later still maybe we
         can add in behavior for when an entity breaks apart into pieces upon a
         collision with force exceeding some internal integrity value.
-    - Move entities to their own module and file.
 
 * Maybe make a PlayerControl struct that has methods for specific keyboard and
     mouse inputs and translates these to changes within a linked entity.
