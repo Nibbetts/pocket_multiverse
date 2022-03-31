@@ -1,5 +1,6 @@
 mod universes;
 mod entities;
+mod spaceship;
 
 
 fn main() {
