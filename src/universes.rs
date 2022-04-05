@@ -157,6 +157,19 @@ impl Trajectory2D {
     fn advance_by() {
 
     }
+
+    /// Constructor
+    fn from(x: f32, y: f32, vel: &[f32; 2]) -> Trajectory2D {
+        todo!(); // TODO!
+        Trajectory2D {
+            m: 0.,
+            b: 0.,
+            bound: LineBound::Upper,
+            x,
+            y,
+            length: 0.,
+        }
+    }
 }
 
 impl Universe {
@@ -235,12 +248,14 @@ pub fn load(level_name: &str) -> Result<Universe, Error> {
             find_other(UnorderedPair(vib, vic)),
             find_other(UnorderedPair(vic, via)),
         ];
-        // Convert vertices to 2D and find line segments
+        // Convert vertices to 2D and find line segments.
+        //  We denote the triangle's three vertices as a, b, and c.
         //  We do this by representing the triangle in a new orthonormal basis,
         //      { ab / ||ab||_2, (ab/||ab||_2) X N, N }, where N is the normal
-        //      of the triangle. This aligns the basis to the bottom of the
-        //      triangle in the first dimension and lays it flat in the third.
-        //  We denote the triangle's three vertices as a, b, and c.
+        //      of the triangle. This basis puts a at the origin, aligns ab
+        //      (the bottom of the triangle) to the first axis,
+        //      and lays the triangle flat in the third. Only one value needs
+        //      recorded to represent b, and two for c.
         //  We find ct by first finding a transition matrix m_tu such that
         //      m_tu dot cu = ct, where u is for universe basis and t is for
         //      the 2D triangle basis.
