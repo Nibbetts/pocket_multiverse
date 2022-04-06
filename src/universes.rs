@@ -132,8 +132,8 @@ fn distance2D(x1: f32, y1: f32, x2: f32, y2: f32) -> f32 {
 
 /// A bound on a line, representing the start of a Trajectory
 enum LineBound {
-    Upper,
-    Lower,
+    Upper, // The bound is an upper bound, meaning the trajectory points down
+    Lower, // The bound is a lower bound, meaning the trajectory points up
 }
 
 /// A trajectory across a 2D plane, with slope, intercept, upper or lower bound
@@ -167,7 +167,7 @@ impl Trajectory2D {
             m,
             b: y - m * x,
             bound: if (vel2D[1] > 0.) || (vel2D[1] == 0. &&  vel2D[0] >= 0.)
-                {LineBound::Upper} else {LineBound::Lower},
+                {LineBound::Lower} else {LineBound::Upper},
             x,
             y,
             length: l2_norm(vel2D),
@@ -279,7 +279,7 @@ pub fn load(level_name: &str) -> Result<Universe, Error> {
         name: String::from(level_name),
         vertices: vertices,
         triangles: ?,
-        maxdim: ?, // TODO: find average edge length, use to give default scale if not included in level metadata
+        maxdim: ?, // TODO: find average edge length, use to give default scale if not included in level metadata // or maybe variance, smallest within certain commonality?
         count: ?,
     })
 
