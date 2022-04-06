@@ -96,7 +96,9 @@ impl LineSegment2D {
                     Some((d, Interp((y - self.l) / (self.u - self.l))))
                 },
             }
-        }
+        }// TODO: What happens when Trajectory is flat or vertical??
+        // If bound is upper, trajectory should never intersect floor of triangle. For other cases, figure out when slope is < or > triangle side slopes.
+        // Make sure to include support for triangles with inversely sloped legs.
     }
 }
 
@@ -159,15 +161,16 @@ impl Trajectory2D {
     }
 
     /// Constructor
-    fn from(x: f32, y: f32, vel: &[f32; 2]) -> Trajectory2D {
-        todo!(); // TODO!
+    fn from(x: f32, y: f32, vel2D: ArrayView1<f32>) -> Trajectory2D {
+        let m = vel2D[1] / vel2D[0];
         Trajectory2D {
-            m: 0.,
-            b: 0.,
-            bound: LineBound::Upper,
+            m,
+            b: y - m * x,
+            bound: if (vel2D[1] > 0.) || (vel2D[1] == 0. &&  vel2D[0] >= 0.)
+                {LineBound::Upper} else {LineBound::Lower},
             x,
             y,
-            length: 0.,
+            length: l2_norm(vel2D),
         }
     }
 }
@@ -210,6 +213,7 @@ pub fn load(level_name: &str) -> Result<Universe, Error> {
         // Add to edge-triangle map
         // NOTE: No need to check for duplicates or holes or zero-area
         //  triangles, since this is done by stl_io::IndexedMesh::validate
+        // TODO: Need to check that each vertex normal is no more than 90 deg from each adjacent face normal? (use dot product?)
         for (i1, i2) in [(0, 1), (1, 2), (2, 0)] {
             let e = UnorderedPair(t.vertices[i1], t.vertices[i2]);
             match e_to_t.get(&e) {
