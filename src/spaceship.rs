@@ -2,11 +2,26 @@
 
 use crate::entities::Entity;
 
+enum InputType {
+    Keyboard,
+    Mouse,
+    AI,
+    None,
+}
+
+struct Controller {
+    input_type: InputType,
+    // ship calls get_input or it could be a return from an update function.
+    // For now: assume this action returns a forward thrust amount and rotational thrust amount. Also separate inputs for special weapons/turbo buttons, but generic
+}
+
 ///
 // TODO: should this be moved to the entities file?
 struct Spaceship {
     /// The physics Entity we're using to track the ship in space
     entity: Entity,
+    /// The input-gathering object for this spaceship
+    controller: Controller,
     /// normalized direction vector representing input direction
     input_direction: (f64, f64),
     /// fixed value

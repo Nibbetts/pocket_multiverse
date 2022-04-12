@@ -16,10 +16,10 @@ pub struct Entity {
     /// The index of the Triangle that the Entity is currently on, and in the frame of reference of:
     tri: TriID,
     /// Entity's current 2D orientation within its current Triangle's frame of reference:
-    coords: (f32, f32),
+    coords: [f32, 2],
     angle: f32,
     /// Entity's current 2D velocity:
-    velocity: (f32, f32),
+    velocity: [f32; 2],
     angular_velocity: f32,
     /// Entity's current base physical properties:
     mass: f32,
@@ -28,8 +28,9 @@ pub struct Entity {
 }
 
 impl Entity {
-    fn thrust(&mut self, accel: [f32; 2], angular: f32) {
-        //TODO
+    fn thrust(&mut self, accel: [f32; 2], angular_thrust: f32) {
+        self.velocity += accel;
+        self.angular_velocity += angular_thrust;
     }
 
     fn bounce(&mut self, other: &Entity) {
@@ -72,7 +73,7 @@ pub struct LargeEntity {
     /// The index of the Triangle that the Entity is currently on, and in the frame of reference of:
     triangle_idx: usize,
     /// Entity's current 2D orientation within its current Triangle's frame of reference:
-    coords: (f32, f32),
+    coords: [f32, 2],
     angle: f32,
     /// Entity's base physical properties:
     motion: MotionPattern,
@@ -91,7 +92,7 @@ impl StepUpdates for LargeEntity {
 /// Such an entity will not be visible, except by its effects.
 pub struct LargeEntity3D {
     /// Entity's current 3D location
-    coords3D: (f32, f32, f32),
+    coords3D: [f32, 3],
     /// Entity's base physical properties:
     motion: MotionPattern3D,
     gravitation: Gravitation,
@@ -105,14 +106,14 @@ impl StepUpdates for LargeEntity3D {
 enum MotionPattern {
     Stationary,
     Path { waypoints: Vec<UnivPos>, speeds: Vec<f32> },
-    Orbit { center: (f32, f32), radius: f32, angular_velocity: f32 },
-    Straight { velocity: (f32, f32), angular_velocity: f32 },
+    Orbit { center: [f32, 2], radius: f32, angular_velocity: f32 },
+    Straight { velocity: [f32, 2], angular_velocity: f32 },
 }
 enum MotionPattern3D {
     Stationary,
     Oscillation {
-        start_pos: (f32, f32, f32),
-        end_pos: (f32, f32, f32),
+        start_pos: [f32, 3],
+        end_pos: [f32, 3],
         period: f32,
     }
 }
@@ -120,7 +121,7 @@ enum MotionPattern3D {
 // TODO: determine whether it's worth it to use this in normal entity stuff as well
 struct UnivPos {
     tri: TriID,
-    coords: (f32, f32),
+    coords: [f32, 2],
     angle: f32,
 }
 
