@@ -231,6 +231,7 @@ impl Universe {
             MODEL_PATH.to_string() + level_name + MODEL_FORMAT)?;
         let model = stl_io::read_stl(&mut file)?;
         model.validate()?;
+        
         file = OpenOptions::new().read(true).open(
             LEVEL_PATH.to_string() + level_name + LEVEL_FORMAT)?;
         // let metadata = ??? //TODO: finish metadata
