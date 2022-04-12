@@ -1,3 +1,5 @@
+//! ## Spaceship
+
 use crate::entities::Entity;
 
 ///

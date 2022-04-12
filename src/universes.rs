@@ -1,3 +1,9 @@
+//! ## Universes
+//! 
+//! This module describes and implements a pocket Universe, a 2D space wrapped
+//! around the surface of a 3D model, constructing what amounts to a graph or
+//! network of Triangles of space, and functionalities to make this work.
+
 use std::fs::OpenOptions;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
@@ -19,9 +25,13 @@ pub struct Universe {
     name: String,
     vertices: Vec<Vertex>,
     triangles: Vec<Triangle>,
-    bounds: [[f32; 2]; 3], // x, y, z, each a pair of (min, max)
+    bounds: [Bounds; 3], // x, y, z, each a pair of (min, max)
     count: usize, // triangle count
 }
+
+#[derive(PartialEq)]
+pub struct TriID(usize); /// An index into the Universe's list of Triangles
+pub struct Bounds(f32, f32); /// Represents a range of values or space: [min, max]
 
 // TODO:  test and consider whether we need a full graph structure implementation
 //  which stores things in Universe by their references instead of by indices. It would
@@ -52,7 +62,7 @@ struct Vertex {
 struct Triangle {
     normal: Array1<f32>,
     // vertices: [usize; 3],
-    neighbors: [usize; 3],
+    neighbors: [TriID; 3],
     segments: [LineSegment2D; 3],
     // edges: [[u32; 2]; 3],
 }
@@ -118,6 +128,7 @@ impl LineSegment2D {
 struct Interp(f32);
 // /// A Point in 2D space. Position, not movement or direction.
 // struct Point2D { x: f32, y: f32 }
+// TODO: how is this different from type declaration like "type Interp: f32"?
 
 /*
 If we can do it all in 3D without having problems when lines barely miss
@@ -241,7 +252,7 @@ impl Universe {
         // Find the triangles adjacent to each vertex and edge
         let (model_v, model_t) = (model.vertices, model.faces);
         let mut v_to_t: HashMap<usize, Vec<&stl_io::IndexedTriangle>> = HashMap::new(); // Vertex index -> Vec<adjacent triangles>
-        let mut e_to_t: HashMap<UnorderedPair<usize>, Vec<usize>> = HashMap::new(); // edge -> Vec<adjacent triangles' indices>
+        let mut e_to_t: HashMap<UnorderedPair<usize>, Vec<TriID>> = HashMap::new(); // edge -> Vec<adjacent triangles' indices>
         for (c, t) in model_t.iter().enumerate() {
             // Add to vertex-triangle map
             for vi in t.vertices {
@@ -257,8 +268,8 @@ impl Universe {
             for (i1, i2) in [(0, 1), (1, 2), (2, 0)] {
                 let e = UnorderedPair(t.vertices[i1], t.vertices[i2]);
                 match e_to_t.get(&e) {
-                    Some(o) => o.push(c),
-                    None => {e_to_t.insert(e, vec![c]);},
+                    Some(o) => o.push(TriID(c)),
+                    None => {e_to_t.insert(e, vec![TriID(c)]);},
                 }
             }
         }
@@ -299,7 +310,7 @@ impl Universe {
             let normal = arr1(&[n[0], n[1], n[2]]); // Convert data structure
             let find_other = |e: UnorderedPair<usize>| {
                 let ti = e_to_t.get(&e).unwrap();
-                if c == ti[0] { ti[1] } else { ti[0] }
+                if TriID(c) == ti[0] { ti[1] } else { ti[0] }
             }; // A closure that finds triangle neighbors across edges
             let via = t.vertices[0]; // Index to vertex
             let vib = t.vertices[1]; // Index to vertex
@@ -337,7 +348,7 @@ impl Universe {
             name: String::from(level_name),
             vertices,
             triangles,
-            bounds: [[x_min, x_max], [y_min, y_max], [z_min, z_max]],
+            bounds: [Bounds(x_min, x_max), Bounds(y_min, y_max), Bounds(z_min, z_max)],
             count: triangles.len(),
         })
 

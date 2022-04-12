@@ -1,3 +1,5 @@
+//! # Pocket Multiverse
+
 mod universes;
 mod entities;
 mod spaceship;
