@@ -2,7 +2,7 @@ use std::fs::OpenOptions;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::io::Error;
-use ndarray::{Array1, arr1, arr2, ArrayView1};
+use ndarray::{Array1, Array2, arr1, ArrayView1, stack, Axis};
 use unordered_pair::UnorderedPair;
 use stl_io;
 
@@ -19,8 +19,8 @@ pub struct Universe {
     name: String,
     vertices: Vec<Vertex>,
     triangles: Vec<Triangle>,
-    maxdim: f32, // make max(h,w,d)/scale
-    count: u32, // triangle count
+    bounds: [[f32; 2]; 3], // x, y, z, each a pair of (min, max)
+    count: usize, // triangle count
 }
 
 // TODO:  test and consider whether we need a full graph structure implementation
@@ -68,6 +68,18 @@ struct LineSegment2D {
 }
 
 impl LineSegment2D {
+    // Create LineSegment2D from two 2D points
+    fn from(A: &Array1<f32>, B: &Array1<f32>) -> LineSegment2D {
+        let (a, b) = if A[1] < B[1] {(A, B)} else {(B, A)}; // Swap if wrong order
+        let m = (a[1] - b[1]) / (a[0] - b[0]);
+        LineSegment2D {
+            m,
+            b: a[1] - m * a[0],
+            l: a[1],
+            u: b[1],
+        }
+    }
+
     /// Finds the interction between a Trajectory2D and this segment,
     /// if it exists, subtracting from the trajectory's length and returning
     /// how far up the segment from l to u the intersection occurs, scaled to
@@ -177,117 +189,171 @@ impl Trajectory2D {
 
 impl Universe {
     //
-}
 
-/// Loads a universe by name from the model and level directories,
-/// for its 3D data and metadata, respectively.
-/// 
-/// Performs all the 3D geometry processing necessary to prepare it for
-/// locating and navigating on its surface.
-pub fn load(level_name: &str) -> Result<Universe, Error> {
-
-    // Load the data from its files
-    // TODO: add error catching later, instead of 'panic'ing
-    let mut file = OpenOptions::new().read(true).open(
-        MODEL_PATH.to_string() + level_name + MODEL_FORMAT)?;
-    let model = stl_io::read_stl(&mut file)?;
-    model.validate()?;
-    file = OpenOptions::new().read(true).open(
-        LEVEL_PATH.to_string() + level_name + LEVEL_FORMAT)?;
-    // let metadata = ???
-
-    // Find Neighbors and create graph structure
-
-    // Find the triangles adjacent to each vertex and edge
-    let (model_v, model_t) = (model.vertices, model.faces);
-    let mut v_to_t: HashMap<usize, Vec<&stl_io::IndexedTriangle>> = HashMap::new(); // Vertex index -> Vec<adjacent triangles>
-    let mut e_to_t: HashMap<UnorderedPair<usize>, Vec<usize>> = HashMap::new(); // edge -> Vec<adjacent triangles' indices>
-    for (c, t) in model_t.iter().enumerate() {
-        // Add to vertex-triangle map
-        for vi in t.vertices {
-            match v_to_t.get(&vi) {
-                Some(o) => o.push(t),
-                None => {v_to_t.insert(vi, vec![t]);},
-            }
-        }
-        // Add to edge-triangle map
-        // NOTE: No need to check for duplicates or holes or zero-area
-        //  triangles, since this is done by stl_io::IndexedMesh::validate
-        // TODO: Need to check that each vertex normal is no more than 90 deg from each adjacent face normal? (use dot product?)
-        for (i1, i2) in [(0, 1), (1, 2), (2, 0)] {
-            let e = UnorderedPair(t.vertices[i1], t.vertices[i2]);
-            match e_to_t.get(&e) {
-                Some(o) => o.push(c),
-                None => {e_to_t.insert(e, vec![c]);},
-            }
-        }
-    }
-    // Create Vertex structs
-    let vertices = Vec::new();
-    for (vi, tris) in v_to_t {
-        let v = model_v[vi];
-        let position = arr1(&[v[0], v[1], v[2]]);
-        let len = tris.len(); // get number of triangles adjacent
-        let mut normal = normalize(tris.iter().fold( // Find the average normal of the others
-            arr1(&[0f32, 0f32, 0f32]), |sum, t| {
-                let n = t.normal;
-                sum + arr1(&[n[0], n[1], n[2]])
-            }));
-        vertices.push(Vertex{position, normal});
-    }
-    // Create Triangle structs
-    let triangles = Vec::new();
-    for (c, t) in model_t.iter().enumerate() {
-        let n = t.normal;
-        let normal = arr1(&[n[0], n[1], n[2]]);
-        let find_other = |e: UnorderedPair<usize>| {
-            let ti = e_to_t.get(&e).unwrap();
-            if c == ti[0] { ti[1] } else { ti[0] }
-        };
-        let via = t.vertices[0]; // Index to vertex
-        let vib = t.vertices[1]; // Index to vertex
-        let vic = t.vertices[2]; // Index to vertex
-        let neighbors = [
-            find_other(UnorderedPair(via, vib)),
-            find_other(UnorderedPair(vib, vic)),
-            find_other(UnorderedPair(vic, via)),
-        ];
-        // Convert vertices to 2D and find line segments.
-        //  We denote the triangle's three vertices as a, b, and c.
-        //  We do this by representing the triangle in a new orthonormal basis,
-        //      { ab / ||ab||_2, (ab/||ab||_2) X N, N }, where N is the normal
-        //      of the triangle. This basis puts a at the origin, aligns ab
-        //      (the bottom of the triangle) to the first axis,
-        //      and lays the triangle flat in the third. Only one value needs
-        //      recorded to represent b, and two for c.
-        //  We find ct by first finding a transition matrix m_tu such that
-        //      m_tu dot cu = ct, where u is for universe basis and t is for
-        //      the 2D triangle basis.
-        let ab = vertices[vib].position - vertices[via].position;
+    // This function finds the transition to simplified 2D space for the frame
+    //  of reference of a given triangle in 3D space.
+    //  THIS is where much of the magic happens!
+    // a, b, c are the points of a triangle in 3D space;
+    // N is the triangle's normal vector.
+    //  We do this by representing the triangle in a new orthonormal basis,
+    //      { ab / ||ab||_2, (ab/||ab||_2) X N, N }, where N is the normal
+    //      of the triangle. This basis puts a at the origin, aligns ab
+    //      (the bottom of the triangle) to the first axis,
+    //      and lays the triangle flat in the third. Only one value needs
+    //      recorded to represent b, and two for c.
+    //  We find cT by first finding a transition matrix m_TU such that
+    //      m_TU dot cU = cT, where U is for universe basis and T is for
+    //      the 2D triangle basis.
+    fn tri3Dto2D(a: &Array1<f32>, b: &Array1<f32>, c: &Array1<f32>, N: &Array1<f32>) -> (Array1<f32>, Array1<f32>, Array2<f32>) {
+        let ab: Array1<f32> = b - a;
         let ab_norm = l2_norm(ab.view());
-        let m_tu = arr2(&[[]]); // TODO: convert all code to nalgebra so we have access to cross product! Or just compute it.
-        let at = (0., 0.);
-        let bt = (ab_norm, 0.);
-        let ct = ()
-        triangles.push(Triangle { normal, neighbors, segments });
+        let x = ab / ab_norm;
+        let xcrossN = cross(x.view(), N.view());
+        
+        let m_TU = stack(Axis(0), &[x.view(), xcrossN.view()]).unwrap(); // TODO: convert all code to nalgebra so we have access to cross product! Or just compute it.
+        //let aT = (0., 0.); // This is obvious in our new frame of reference.
+        let bT = arr1(&[ab_norm, 0.]);
+        let cT = m_TU.dot(c);
+        
+        (bT, cT, m_TU)
     }
-    // TODO: make 1/(average of edge length), but scale all points before finalizing
-    // TODO: make sure all triangles have exactly three neighbors
 
-    // Finally, instantiate the universe and return it
-    Ok(Universe {
-        name: String::from(level_name),
-        vertices: vertices,
-        triangles: ?,
-        maxdim: ?, // TODO: find average edge length, use to give default scale if not included in level metadata // or maybe variance, smallest within certain commonality?
-        count: ?,
-    })
+    /// Loads a universe by name from the model and level directories,
+    /// for its 3D data and metadata, respectively.
+    /// 
+    /// Performs all the 3D geometry processing necessary to prepare it for
+    /// locating and navigating on its surface.
+    pub fn load(level_name: &str) -> Result<Universe, Error> {
 
-    //TODO: later, learn how to do it all with references instead of just indices
+        // Load the data from its files
+        // TODO: add error catching later, instead of 'panic'ing
+        let mut file = OpenOptions::new().read(true).open(
+            MODEL_PATH.to_string() + level_name + MODEL_FORMAT)?;
+        let model = stl_io::read_stl(&mut file)?;
+        model.validate()?;
+        file = OpenOptions::new().read(true).open(
+            LEVEL_PATH.to_string() + level_name + LEVEL_FORMAT)?;
+        // let metadata = ??? //TODO: finish metadata
+
+        //// Find Triangle neighbors and create graph structure for the Universe
+
+        // Find the triangles adjacent to each vertex and edge
+        let (model_v, model_t) = (model.vertices, model.faces);
+        let mut v_to_t: HashMap<usize, Vec<&stl_io::IndexedTriangle>> = HashMap::new(); // Vertex index -> Vec<adjacent triangles>
+        let mut e_to_t: HashMap<UnorderedPair<usize>, Vec<usize>> = HashMap::new(); // edge -> Vec<adjacent triangles' indices>
+        for (c, t) in model_t.iter().enumerate() {
+            // Add to vertex-triangle map
+            for vi in t.vertices {
+                match v_to_t.get(&vi) {
+                    Some(o) => o.push(t),
+                    None => {v_to_t.insert(vi, vec![t]);},
+                }
+            }
+            // Add to edge-triangle map
+            // NOTE: No need to check for duplicates or holes or zero-area
+            //  triangles, since this is done by stl_io::IndexedMesh::validate
+            // TODO: Need to check that each vertex normal is no more than 90 deg from each adjacent face normal? (use dot product?)
+            for (i1, i2) in [(0, 1), (1, 2), (2, 0)] {
+                let e = UnorderedPair(t.vertices[i1], t.vertices[i2]);
+                match e_to_t.get(&e) {
+                    Some(o) => o.push(c),
+                    None => {e_to_t.insert(e, vec![c]);},
+                }
+            }
+        }
+
+        // Create Vertex structs
+        //  Simultaneously track maximum and minimum dimensions of the Universe
+        let vertices = Vec::new();
+        let first_v = model_v[0];
+        let x_min = first_v[0]; // Maximum and minimum starting values
+        let y_min = first_v[1];
+        let z_min = first_v[2];
+        let x_max = first_v[0];
+        let y_max = first_v[1];
+        let z_max = first_v[2];
+        for (vi, tris) in v_to_t {
+            let v = model_v[vi];
+            x_min = x_min.min(v[0]); // Adjust bounds as we go
+            y_min = y_min.min(v[1]);
+            z_min = z_min.min(v[2]);
+            x_max = x_max.max(v[0]);
+            y_max = y_max.max(v[1]);
+            z_max = z_max.max(v[2]);
+            let position = arr1(&[v[0], v[1], v[2]]);
+            let len = tris.len(); // get number of triangles adjacent
+            let mut normal = normalize(tris.iter().fold( // Find the average normal of the others
+                arr1(&[0f32, 0f32, 0f32]), |sum, t| {
+                    let n = t.normal;
+                    sum + arr1(&[n[0], n[1], n[2]])
+                }));
+            vertices.push(Vertex{position, normal});
+        }
+
+        // Create Triangle structs
+        let triangles = Vec::new();
+
+        for (c, t) in model_t.iter().enumerate() {
+            let n = t.normal;
+            let normal = arr1(&[n[0], n[1], n[2]]); // Convert data structure
+            let find_other = |e: UnorderedPair<usize>| {
+                let ti = e_to_t.get(&e).unwrap();
+                if c == ti[0] { ti[1] } else { ti[0] }
+            }; // A closure that finds triangle neighbors across edges
+            let via = t.vertices[0]; // Index to vertex
+            let vib = t.vertices[1]; // Index to vertex
+            let vic = t.vertices[2]; // Index to vertex
+            let neighbors = [ // Find neighboring three triangles
+                find_other(UnorderedPair(via, vib)),
+                find_other(UnorderedPair(vib, vic)),
+                find_other(UnorderedPair(vic, via)),
+            ];
+
+            // Convert vertices to 2D
+            let (bT, cT, m_TU) = Universe::tri3Dto2D(
+                &vertices[via].position,
+                &vertices[vib].position,
+                &vertices[vic].position,
+                &normal,
+            );
+            // Point a is always (0,0) in the triangle's frame of reference
+            let aT = arr1(&[0., 0.]);
+
+            // Find line segments
+            let ab = LineSegment2D::from(&aT, &bT);
+            let bc = LineSegment2D::from(&bT, &cT);
+            let ac = LineSegment2D::from(&aT, &cT);
+            let segments = [ab, bc, ac];
+            // There are two segments representing each edge; this is because
+            //  they are in differing 2D frames of reference.
+
+            // Finally make the triangle
+            triangles.push(Triangle { normal, neighbors, segments });
+        }
+
+        // Finally, instantiate the universe and return it
+        Ok(Universe {
+            name: String::from(level_name),
+            vertices,
+            triangles,
+            bounds: [[x_min, x_max], [y_min, y_max], [z_min, z_max]],
+            count: triangles.len(),
+        })
+
+        //TODO: later, learn how to do it all with references instead of just indices
+    }
 }
 
 fn l2_norm(x: ArrayView1<f32>) -> f32 {
     x.dot(&x).sqrt()
+}
+
+fn cross(a: ArrayView1<f32>, b: ArrayView1<f32>) -> Array1<f32> {
+    arr1(&[
+        a[1]*b[2] - a[2]*b[1],
+        a[2]*b[0] - a[0]*b[2],
+        a[0]*b[1] - a[1]*b[0],
+    ])
 }
 
 fn normalize(mut x: Array1<f32>) -> Array1<f32> {
