@@ -13,6 +13,7 @@ fn main() {
     // controls to universe loading and such.
     println!("Loading 'Hambone' pocket universe...");
     let pocket = universes::Universe::load("hambone").unwrap();
+    println!("Success!");
 }
 
 /* TODO on Entities:

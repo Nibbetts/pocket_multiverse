@@ -15,7 +15,7 @@ use stl_io;
 const MODEL_PATH:   &str = "resources/models/";
 const LEVEL_PATH:   &str = "resources/levels/";
 const MODEL_FORMAT: &str = ".stl";
-const LEVEL_FORMAT: &str = ".toml";
+const LEVEL_FORMAT: &str = ".json";
 
 
 /// A pocket universe, with all data and functions necessary for navigating
@@ -293,8 +293,7 @@ impl Universe {
             y_max = y_max.max(v[1]);
             z_max = z_max.max(v[2]);
             let position = arr1(&[v[0], v[1], v[2]]);
-            let len = tris.len(); // get number of triangles adjacent
-            let mut normal = normalize(tris.iter().fold( // Find the average normal of the others
+            let normal = normalize(tris.iter().fold( // Find the average normal of the others
                 arr1(&[0f32, 0f32, 0f32]), |sum, t| {
                     let n = t.normal;
                     sum + arr1(&[n[0], n[1], n[2]])
