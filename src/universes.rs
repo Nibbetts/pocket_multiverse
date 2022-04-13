@@ -161,10 +161,11 @@ enum LineBound {
 
 /// A trajectory across a 2D plane, with slope, intercept, upper or lower bound
 /// from which movement originates, and length.
-struct Trajectory2D {
+pub struct Trajectory2D {
     m: f32, // Slope
     b: f32, // y-Intercept
     bound: LineBound, // Whether bound above or below
+    tri: TriID, // Triangle start position is in
     x: f32, // start position x
     y: f32, // start position y
     length: f32, // Distance yet to travel
@@ -173,9 +174,10 @@ struct Trajectory2D {
 impl Trajectory2D {
     /// Moves the trajectory to its end point, changing both start and length
     /// values. For use within a Triangle, as it has no knowledge of boundaries
-    fn move_to_end(&mut self) {
+    pub fn move_to_end(&mut self) -> (TriID, f32, f32) {
         // TODO: move x and y by length in direction of trajectory
         self.length = 0.;
+        (self.tri, self.x, self.y) //TODO: bogus return right now!
     }
 
     /// TODO
@@ -184,13 +186,14 @@ impl Trajectory2D {
     }
 
     /// Constructor
-    fn from(x: f32, y: f32, vel2D: ArrayView1<f32>) -> Trajectory2D {
+    pub fn new(tri: TriID, x: f32, y: f32, vel2D: ArrayView1<f32>) -> Trajectory2D {
         let m = vel2D[1] / vel2D[0];
         Trajectory2D {
             m,
             b: y - m * x,
             bound: if (vel2D[1] > 0.) || (vel2D[1] == 0. &&  vel2D[0] >= 0.)
                 {LineBound::Lower} else {LineBound::Upper},
+            tri,
             x,
             y,
             length: l2_norm(vel2D),
@@ -356,11 +359,11 @@ impl Universe {
     }
 }
 
-fn l2_norm(x: ArrayView1<f32>) -> f32 {
+pub fn l2_norm(x: ArrayView1<f32>) -> f32 {
     x.dot(&x).sqrt()
 }
 
-fn cross(a: ArrayView1<f32>, b: ArrayView1<f32>) -> Array1<f32> {
+pub fn cross(a: ArrayView1<f32>, b: ArrayView1<f32>) -> Array1<f32> {
     arr1(&[
         a[1]*b[2] - a[2]*b[1],
         a[2]*b[0] - a[0]*b[2],
@@ -368,10 +371,15 @@ fn cross(a: ArrayView1<f32>, b: ArrayView1<f32>) -> Array1<f32> {
     ])
 }
 
-fn normalize(mut x: Array1<f32>) -> Array1<f32> {
+pub fn normalize(mut x: Array1<f32>) -> Array1<f32> {
     let norm = l2_norm(x.view());
     x.mapv_inplace(|e| e/norm);
     x
+}
+
+pub fn set_norm(x: &mut Array1<f32>, len: f32) {
+    let norm = l2_norm(x.view());
+    x.mapv_inplace(|e| e/norm * len);
 }
 
 // fn flatten_by_normal

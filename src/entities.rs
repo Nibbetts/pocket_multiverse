@@ -1,12 +1,13 @@
 //! ## Entities
 
-use crate::universes::{TriID, Bounds};
+use crate::universes::{ TriID, Bounds, Trajectory2D, l2_norm, set_norm };
+use ndarray::{ ArrayView1, Array1 };
 
 pub trait StepUpdates {
     /// called every frame and used to update an object's logic.
     /// delta_time is the time between the last frame and the next. It's used to scale things to how frequently frames are rendered.
     /// delta_time can be a fixed time to make things simpler for now.
-    fn step(&mut self, delta_time: f64);
+    fn step(&mut self, delta_time: f32);
 }
 
 /// An Entity is a physics object represented in the Universe.
@@ -19,7 +20,7 @@ pub struct Entity {
     coords: [f32; 2],
     angle: f32,
     /// Entity's current 2D velocity:
-    velocity: [f32; 2],
+    velocity: Array1<f32>,
     angular_velocity: f32,
     /// Entity's current base physical properties:
     mass: f32,
@@ -28,12 +29,36 @@ pub struct Entity {
 }
 
 impl Entity {
-    fn apply_force(&mut self, accel: [f32; 2], angular_accel: f32) {
-        self.velocity[0] += accel[0];
-        self.velocity[1] += accel[1];
-        self.angular_velocity += angular_accel;
-        // It could be fun if your rotational safeguards break AND a thruster
-        //  gets jammed!
+    /// Apply an instantaneous force to the Entity for a given time delta.
+    /// For absolute directions in 2D space, use rel_to_angle=false,
+    ///     but to apply it as if internally, rotated by the direction the
+    ///     entity is facing, use rel_to_angle=true.
+    pub fn apply_force(&mut self, force: [f32; 2], angular_accel: f32, rel_to_angle: bool, delta_time: f32) {
+        // force = mass * accel -> accel = force / mass
+        let accel_x = force[0] / self.mass * delta_time;
+        let accel_y = force[1] / self.mass * delta_time;
+        self.velocity[0] += if rel_to_angle { accel_x * self.angle.cos() } else { accel_x };
+        self.velocity[1] += if rel_to_angle { accel_y * self.angle.sin() } else { accel_y };
+        self.angular_velocity += angular_accel * delta_time;
+    }
+
+    /// Slow down velocity and rotation
+    pub fn dampen(&mut self, force: f32, angular_accel: f32, delta_time: f32) {
+        let accel = (force / self.mass * delta_time).abs();
+        let norm = l2_norm(self.velocity.view());
+
+        // Dampen velocity
+        if accel >= norm { self.velocity *= 0.; }
+        else { set_norm(&mut self.velocity, norm-accel); }
+
+        // Now dampen angular velocity
+        let mut aa = angular_accel.abs() * delta_time;
+        if aa >= self.angular_velocity.abs() {
+            self.angular_velocity = 0.;
+        } else {
+            if self.angular_velocity < 0. { aa *= -1.; }
+            self.angular_velocity -= aa;
+        }
     }
 
     fn bounce(&mut self, other: &Entity) {
@@ -66,11 +91,17 @@ impl Entity {
     // }
 }
 impl StepUpdates for Entity {
-    fn step(&mut self, delta_time: f64) {
-        //TODO: This was moved over from spaceship; needs checked for correctness:
-        // self.velocity * delta_time;
-        // self.triangle_idx;
-        // self.coords;
+    fn step(&mut self, delta_time: f32) {
+        let mut traj = Trajectory2D::new(
+            self.tri,
+            self.coords[0],
+            self.coords[1],
+            (self.velocity.to_owned() * delta_time).view()
+        );
+        let (tri, x, y) = traj.move_to_end();
+        self.tri = tri;
+        self.coords = [x, y];
+        self.angle += self.angular_velocity * delta_time;
     }
 }
 
@@ -88,7 +119,7 @@ pub struct LargeEntity {
     restitution: f32,
 }
 impl StepUpdates for LargeEntity {
-    fn step(&mut self, delta_time: f64) {
+    fn step(&mut self, delta_time: f32) {
         //TODO:
     }
 }
@@ -104,7 +135,7 @@ pub struct LargeEntity3D {
     gravitation: Gravitation,
 }
 impl StepUpdates for LargeEntity3D {
-    fn step(&mut self, delta_time: f64) {
+    fn step(&mut self, delta_time: f32) {
         //TODO:
     }
 }
