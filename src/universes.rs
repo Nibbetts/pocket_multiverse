@@ -6,7 +6,6 @@
 
 use std::fs::OpenOptions;
 use std::collections::HashMap;
-use std::collections::hash_map::Entry;
 use std::io::Error;
 use ndarray::{Array1, Array2, arr1, ArrayView1, stack, Axis};
 use unordered_pair::UnorderedPair;
@@ -29,8 +28,9 @@ pub struct Universe {
     count: usize, // triangle count
 }
 
-#[derive(PartialEq)]
-pub struct TriID(usize); /// An index into the Universe's list of Triangles
+// #[derive(PartialEq)]
+// pub struct TriID(usize); /// An index into the Universe's list of Triangles
+pub type TriID = usize;
 pub struct Bounds(f32, f32); /// Represents a range of values or space: [min, max]
 
 // TODO:  test and consider whether we need a full graph structure implementation
@@ -90,7 +90,7 @@ impl LineSegment2D {
         }
     }
 
-    /// Finds the interction between a Trajectory2D and this segment,
+    /// Finds the intersection between a Trajectory2D and this segment,
     /// if it exists, subtracting from the trajectory's length and returning
     /// how far up the segment from l to u the intersection occurs, scaled to
     /// the interval [0, 1].
@@ -215,7 +215,7 @@ impl Universe {
     //  We find cT by first finding a transition matrix m_TU such that
     //      m_TU dot cU = cT, where U is for universe basis and T is for
     //      the 2D triangle basis.
-    fn tri3Dto2D(a: &Array1<f32>, b: &Array1<f32>, c: &Array1<f32>, N: &Array1<f32>) -> (Array1<f32>, Array1<f32>, Array2<f32>) {
+    fn tri_3D_to_2D(a: &Array1<f32>, b: &Array1<f32>, c: &Array1<f32>, N: &Array1<f32>) -> (Array1<f32>, Array1<f32>, Array2<f32>) {
         let ab: Array1<f32> = b - a;
         let ab_norm = l2_norm(ab.view());
         let x = ab / ab_norm;
@@ -256,7 +256,7 @@ impl Universe {
         for (c, t) in model_t.iter().enumerate() {
             // Add to vertex-triangle map
             for vi in t.vertices {
-                match v_to_t.get(&vi) {
+                match v_to_t.get_mut(&vi) {
                     Some(o) => o.push(t),
                     None => {v_to_t.insert(vi, vec![t]);},
                 }
@@ -267,23 +267,23 @@ impl Universe {
             // TODO: Need to check that each vertex normal is no more than 90 deg from each adjacent face normal? (use dot product?)
             for (i1, i2) in [(0, 1), (1, 2), (2, 0)] {
                 let e = UnorderedPair(t.vertices[i1], t.vertices[i2]);
-                match e_to_t.get(&e) {
-                    Some(o) => o.push(TriID(c)),
-                    None => {e_to_t.insert(e, vec![TriID(c)]);},
+                match e_to_t.get_mut(&e) {
+                    Some(o) => o.push(c as TriID),
+                    None => {e_to_t.insert(e, vec![c as TriID]);},
                 }
             }
         }
 
         // Create Vertex structs
         //  Simultaneously track maximum and minimum dimensions of the Universe
-        let vertices = Vec::new();
+        let mut vertices = Vec::new();
         let first_v = model_v[0];
-        let x_min = first_v[0]; // Maximum and minimum starting values
-        let y_min = first_v[1];
-        let z_min = first_v[2];
-        let x_max = first_v[0];
-        let y_max = first_v[1];
-        let z_max = first_v[2];
+        let mut x_min = first_v[0]; // Maximum and minimum starting values
+        let mut y_min = first_v[1];
+        let mut z_min = first_v[2];
+        let mut x_max = first_v[0];
+        let mut y_max = first_v[1];
+        let mut z_max = first_v[2];
         for (vi, tris) in v_to_t {
             let v = model_v[vi];
             x_min = x_min.min(v[0]); // Adjust bounds as we go
@@ -303,14 +303,14 @@ impl Universe {
         }
 
         // Create Triangle structs
-        let triangles = Vec::new();
+        let mut triangles = Vec::new();
 
         for (c, t) in model_t.iter().enumerate() {
             let n = t.normal;
             let normal = arr1(&[n[0], n[1], n[2]]); // Convert data structure
             let find_other = |e: UnorderedPair<usize>| {
                 let ti = e_to_t.get(&e).unwrap();
-                if TriID(c) == ti[0] { ti[1] } else { ti[0] }
+                if c == ti[0] { ti[1] } else { ti[0] }
             }; // A closure that finds triangle neighbors across edges
             let via = t.vertices[0]; // Index to vertex
             let vib = t.vertices[1]; // Index to vertex
@@ -322,7 +322,7 @@ impl Universe {
             ];
 
             // Convert vertices to 2D
-            let (bT, cT, m_TU) = Universe::tri3Dto2D(
+            let (bT, cT, m_TU) = Universe::tri_3D_to_2D(
                 &vertices[via].position,
                 &vertices[vib].position,
                 &vertices[vic].position,
@@ -344,12 +344,13 @@ impl Universe {
         }
 
         // Finally, instantiate the universe and return it
+        let count = triangles.len();
         Ok(Universe {
             name: String::from(level_name),
             vertices,
             triangles,
             bounds: [Bounds(x_min, x_max), Bounds(y_min, y_max), Bounds(z_min, z_max)],
-            count: triangles.len(),
+            count,
         })
 
         //TODO: later, learn how to do it all with references instead of just indices
