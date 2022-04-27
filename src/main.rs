@@ -1,5 +1,7 @@
 //! # Pocket Multiverse
 
+use crate::engine::Engine;
+
 mod universes;
 mod entities;
 mod spaceship;
@@ -16,7 +18,8 @@ fn main() {
     let pocket = universes::Universe::load("hambone").unwrap();
     println!("Success!");
 
-    graphics::test();
+    let mut engine = Engine::new();
+    engine.start()
 }
 
 /* TODO on Entities:
