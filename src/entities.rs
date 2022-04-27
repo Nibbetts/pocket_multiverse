@@ -76,7 +76,7 @@ impl Entity {
     }
 
     // todo!("call every frame, maybe from an 'engine' struct/file");
-    // fn update(&mut self, delta_time: f64) {
+    // fn update(&mut self, delta_time: f32) {
     //     //TODO
     // }
 

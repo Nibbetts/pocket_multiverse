@@ -4,6 +4,7 @@ mod universes;
 mod entities;
 mod spaceship;
 mod graphics;
+mod engine;
 
 
 fn main() {
@@ -14,6 +15,8 @@ fn main() {
     println!("Loading 'Hambone' pocket universe...");
     let pocket = universes::Universe::load("hambone").unwrap();
     println!("Success!");
+
+    graphics::test();
 }
 
 /* TODO on Entities:
