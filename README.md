@@ -4,6 +4,9 @@ A 2.5D bent-space simulator/game project, still in very early stages and not yet
 
 For more info, see the wiki at https://github.com/Nibbetts/pocket_multiverse/wiki
 
+
+<details><summary>Sphere Map</summary>
+  
 ```stl
 solid
 facet normal 66.60269 17.848269 18.405828
@@ -8576,3 +8579,5 @@ facet normal -5.504455 3.856048 -24.996426
 endfacet
 endsolid
 ```
+
+</details>
