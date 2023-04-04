@@ -25,11 +25,10 @@ impl Controller {
     fn poll(&self) -> Action {
         match &self.input_type {
             InputType::Keyboard => {
-                // TODO: fill in input polling
-                let l = false;
-                let r = false;
-                let u = false;
-                let d = false;
+                let l = false; // TODO: fill in input polling
+                let r = false; // TODO: fill in input polling
+                let u = false; // TODO: fill in input polling
+                let d = false; // TODO: fill in input polling
                 Action {
                     fwd_thrust: (u as u32 as f32)*1. + (d as u32 as f32)*-1.,
                     rot_thrust: (r as u32 as f32)*1. + (l as u32 as f32)*-1.,
